@@ -140,9 +140,13 @@ void AP_MotorsMatrix::set_frame_class_and_type(motor_frame_class frame_class, mo
 
 }
 
-void AP_MotorsMatrix::output_to_motors()
+void AP_MotorsMatrix::output_to_motors() // needs investigation of _pivot_angle_l, _pivot_angle_r
 {
     int8_t i;
+	
+/*	// every time the function is called, this is also called. it works, but is not efficient
+    const char *frame_str = get_frame_string();
+    const char *type_str = get_type_string();// */
 
     switch (_spool_state) {
         case SpoolState::SHUT_DOWN: {
@@ -151,7 +155,11 @@ void AP_MotorsMatrix::output_to_motors()
                 if (motor_enabled[i]) {
                     _actuator[i] = 0.0f;
                 }
-            }
+            } 
+/*			if (frame_str == MOTOR_FRAME_HEXA && type_str == MOTOR_FRAME_TYPE_X) { // broadj
+				rc_write_angle(AP_MOTORS_CH_HEXA_PITCH_L, 0);
+				rc_write_angle(AP_MOTORS_CH_HEXA_PITCH_R, 0);
+			}// */
             break;
         }
         case SpoolState::GROUND_IDLE:
@@ -161,6 +169,11 @@ void AP_MotorsMatrix::output_to_motors()
                     set_actuator_with_slew(_actuator[i], actuator_spin_up_to_ground_idle());
                 }
             }
+			
+/*			if (frame_str == MOTOR_FRAME_HEXA && type_str == MOTOR_FRAME_TYPE_X) { // broadj
+				rc_write_angle(AP_MOTORS_CH_HEXA_PITCH_L, 0);
+				rc_write_angle(AP_MOTORS_CH_HEXA_PITCH_R, 0);
+			}// */				
             break;
         case SpoolState::SPOOLING_UP:
         case SpoolState::THROTTLE_UNLIMITED:
@@ -171,8 +184,15 @@ void AP_MotorsMatrix::output_to_motors()
                     set_actuator_with_slew(_actuator[i], thrust_to_actuator(_thrust_rpyt_out[i]));
                 }
             }
+/*			if (frame_str == MOTOR_FRAME_HEXA && type_str == MOTOR_FRAME_TYPE_X) { // broadj
+				// investigate degrees(_pivot_angle_l) and how to set the pivot_angle_r
+				rc_write_angle(AP_MOTORS_CH_HEXA_PITCH_L, degrees(_pivot_angle_l)*100);
+				rc_write_angle(AP_MOTORS_CH_HEXA_PITCH_R, degrees(_pivot_angle_r)*100);
+			}// */
             break;
     }
+
+
 
     // convert output to PWM and send to each motor
     for (i = 0; i < AP_MOTORS_MAX_NUM_MOTORS; i++) {
@@ -184,7 +204,7 @@ void AP_MotorsMatrix::output_to_motors()
 
 // get_motor_mask - returns a bitmask of which outputs are being used for motors (1 means being used)
 //  this can be used to ensure other pwm outputs (i.e. for servos) do not conflict
-uint16_t AP_MotorsMatrix::get_motor_mask()
+uint16_t AP_MotorsMatrix::get_motor_mask() // done
 {
     uint16_t motor_mask = 0;
     for (uint8_t i = 0; i < AP_MOTORS_MAX_NUM_MOTORS; i++) {
@@ -192,6 +212,15 @@ uint16_t AP_MotorsMatrix::get_motor_mask()
             motor_mask |= 1U << i;
         }
     }
+
+/*	// every time the function is called, this is also called. it works, but is not efficient
+    const char *frame_str = get_frame_string();
+    const char *type_str = get_type_string();
+	if (frame_str == MOTOR_FRAME_HEXA && type_str == MOTOR_FRAME_TYPE_X) { // broadj
+		motor_mask |= (1U << AP_MOTORS_CH_HEXA_PITCH_L) |
+					  (1U << AP_MOTORS_CH_HEXA_PITCH_R);
+	}// */
+	
     uint16_t mask = motor_mask_to_srv_channel_mask(motor_mask);
 
     // add parent's mask
@@ -216,13 +245,43 @@ void AP_MotorsMatrix::output_armed_stabilizing()
     float   yaw_allowed = 1.0f;         // amount of yaw we can fit in
     float   thr_adj;                    // the difference between the pilot's desired throttle and throttle_thrust_best_rpy
 
+/*    const char *frame_str = get_frame_string();
+    const char *type_str = get_type_string();
+	if (frame_str == MOTOR_FRAME_HEXA && type_str == MOTOR_FRAME_TYPE_X) { // broadj
+		// sanity check YAW_SV_ANGLE parameter value to avoid divide by zero
+		_yaw_servo_angle_max_deg = constrain_float(_yaw_servo_angle_max_deg, AP_MOTORS_TRI_SERVO_RANGE_DEG_MIN, AP_MOTORS_TRI_SERVO_RANGE_DEG_MAX);
+		// this actually sets the servo angles.
+		SRV_Channels::set_angle(SRV_Channels::get_motor_function(AP_MOTORS_CH_HEXA_PITCH_L), _yaw_servo_angle_max_deg*100);
+		SRV_Channels::set_angle(SRV_Channels::get_motor_function(AP_MOTORS_CH_HEXA_PITCH_R), _yaw_servo_angle_max_deg*100);
+	}// */
+
+
     // apply voltage and air pressure compensation
     const float compensation_gain = get_compensation_gain(); // compensation for battery voltage and altitude
     roll_thrust = (_roll_in + _roll_in_ff) * compensation_gain;
     pitch_thrust = (_pitch_in + _pitch_in_ff) * compensation_gain;
     yaw_thrust = (_yaw_in + _yaw_in_ff) * compensation_gain;
+
+/*	if (frame_str == MOTOR_FRAME_HEXA && type_str == MOTOR_FRAME_TYPE_X) { // broadj
+		yaw_thrust = (_yaw_in + _yaw_in_ff) * compensation_gain * sinf(radians(_yaw_servo_angle_max_deg)); 
+		// we scale this so a thrust request of 1.0f will ask for full servo deflection
+	}// */
+
+
     throttle_thrust = get_throttle() * compensation_gain;
     throttle_avg_max = _throttle_avg_max * compensation_gain;
+
+
+/*	if (frame_str == MOTOR_FRAME_HEXA && type_str == MOTOR_FRAME_TYPE_X) { // broadj
+		// calculate angle of yaw pivot
+		_pivot_angle = safe_asin(yaw_thrust);
+		if (fabsf(_pivot_angle) > radians(_yaw_servo_angle_max_deg)) {
+			limit.yaw = true;
+			_pivot_angle = constrain_float(_pivot_angle, -radians(_yaw_servo_angle_max_deg), radians(_yaw_servo_angle_max_deg));
+		}
+
+		float pivot_thrust_max = cosf(_pivot_angle);
+	}// */
 
     // If thrust boost is active then do not limit maximum thrust
     throttle_thrust_max = _thrust_boost_ratio + (1.0f - _thrust_boost_ratio) * _throttle_thrust_max * compensation_gain;
@@ -394,6 +453,16 @@ void AP_MotorsMatrix::output_armed_stabilizing()
             _thrust_rpyt_out[i] = (throttle_thrust_best_plus_adj * _throttle_factor[i]) + (rpy_scale * _thrust_rpyt_out[i]);
         }
     }
+	
+	
+/*	if (frame_str == MOTOR_FRAME_HEXA && type_str == MOTOR_FRAME_TYPE_X) { // broadj do for motors 3 and 6.
+		// todo: lookup motors properly if possible
+		//		pivot_angle needs to be individual for each motor
+		// scale pivot thrust to account for pivot angle
+		// we should not need to check for divide by zero as _pivot_angle is constrained to the 5deg ~ 80 deg range
+//		_thrust_rear = _thrust_rear / cosf(_pivot_angle);
+	}// */
+
 
     // determine throttle thrust for harmonic notch
     // compensation_gain can never be zero
@@ -474,6 +543,17 @@ void AP_MotorsMatrix::output_test_seq(uint8_t motor_seq, int16_t pwm)
             rc_write(i, pwm);
         }
     }
+
+/*	// every time the function is called, this is also called. it works, but is not efficient
+    const char *frame_str = get_frame_string();
+    const char *type_str = get_type_string();
+	if (frame_str == MOTOR_FRAME_HEXA && type_str == MOTOR_FRAME_TYPE_X) { // broadj
+	    // left servo
+        rc_write(AP_MOTORS_CH_HEXA_PITCH_L, pwm);
+
+	    // right servo
+        rc_write(AP_MOTORS_CH_HEXA_PITCH_R, pwm);
+	}// */
 }
 
 // output_test_num - spin a motor connected to the specified output channel
@@ -559,7 +639,7 @@ void AP_MotorsMatrix::remove_motor(int8_t motor_num)
         _throttle_factor[motor_num] = 0.0f;
     }
 }
-
+// 20210723 done initial modifications to this routine
 void AP_MotorsMatrix::setup_motors(motor_frame_class frame_class, motor_frame_type frame_type)
 {
     // remove existing motors
@@ -728,12 +808,95 @@ void AP_MotorsMatrix::setup_motors(motor_frame_class frame_class, motor_frame_ty
                     break;
                 case MOTOR_FRAME_TYPE_X:
                     _frame_type_string = "X";
+
+// broadj 20210805
+add_motor_raw(AP_MOTORS_MOT_1, -0.5, -0.866, AP_MOTORS_MATRIX_YAW_FACTOR_CCW, 1);
+add_motor_raw(AP_MOTORS_MOT_2, -0.5, 0.866, AP_MOTORS_MATRIX_YAW_FACTOR_CCW, 2);
+add_motor_raw(AP_MOTORS_MOT_3, 0.5, -0.866, AP_MOTORS_MATRIX_YAW_FACTOR_CW, 3);
+add_motor_raw(AP_MOTORS_MOT_4, 0.5, 0.866, AP_MOTORS_MATRIX_YAW_FACTOR_CW, 4);
+add_motor_raw(AP_MOTORS_MOT_5, -1, 0, AP_MOTORS_MATRIX_YAW_FACTOR_CW, 5);
+add_motor_raw(AP_MOTORS_MOT_6, 1, 0, AP_MOTORS_MATRIX_YAW_FACTOR_CCW, 6);
+
+					// broadj 20210729
+					/* iforce2d constraints
+4 5 200
+3 6 200
+2 1 200
+4 3 200
+6 5 200
+3 2 200
+6 1 200
+1 4 447.2136
+2 5 447.2136
+1 2 h
+6 3 h
+4 5 h
+2 3 v
+3 4 v
+6 5 v
+1 6 v
+					 */
+					 /*
+					add_motor_raw(AP_MOTORS_MOT_1, 0.5, 1, AP_MOTORS_MATRIX_YAW_FACTOR_CW, 1);
+					add_motor_raw(AP_MOTORS_MOT_2, -0.5, 1, AP_MOTORS_MATRIX_YAW_FACTOR_CCW, 2);
+					add_motor_raw(AP_MOTORS_MOT_3, -0.5, 0, AP_MOTORS_MATRIX_YAW_FACTOR_CW, 3);
+					add_motor_raw(AP_MOTORS_MOT_4, -0.5, -1, AP_MOTORS_MATRIX_YAW_FACTOR_CCW, 4);
+					add_motor_raw(AP_MOTORS_MOT_5, 0.5, -1, AP_MOTORS_MATRIX_YAW_FACTOR_CW, 5);
+					add_motor_raw(AP_MOTORS_MOT_6, 0.5, 0, AP_MOTORS_MATRIX_YAW_FACTOR_CCW, 6);
+*/
+					// custom HEXA-X mixing 20210713
+/* iforce2d constraints:
+1 2 200
+2 3 200
+3 4 200
+4 5 200
+5 6 200
+6 1 200
+1 4 400
+2 5 400
+3 6 400
+1 2 h
+5 4 h
+3 6 h
+1 5 v
+2 4 v
+// */
+					/* broadj 20210729 disabled 
+					add_motor_raw(AP_MOTORS_MOT_1, 0.5, 0, 0, 1); // cw
+					add_motor_raw(AP_MOTORS_MOT_2, -0.5, 0, 0, 2); // ccw
+					add_motor_raw(AP_MOTORS_MOT_3, -1, 0, 0, 3); // cw		right-side rotor will need pitch-yaw servo controls
+					add_motor_raw(AP_MOTORS_MOT_4, -0.5, 0, 0, 4); // ccw
+					add_motor_raw(AP_MOTORS_MOT_5, 0.5, 0, 0, 5); // cw
+					add_motor_raw(AP_MOTORS_MOT_6, 1, 0, 0, 6); // ccw		left-side rotor will need pitch-yaw servo controls
+
+					// 20210723 broadj
+					// find the servos
+					if (!SRV_Channels::get_channel_for(SRV_Channel::k_motor7, AP_MOTORS_CH_HEXA_PITCH_L)) {
+						gcs().send_text(MAV_SEVERITY_ERROR, "MotorsHexa: unable to setup pitch channel L");
+						// don't set initialised_ok
+						return;
+					}
+					if (!SRV_Channels::get_channel_for(SRV_Channel::k_motor8, AP_MOTORS_CH_HEXA_PITCH_R)) {
+						gcs().send_text(MAV_SEVERITY_ERROR, "MotorsHexa: unable to setup pitch channel R");
+						// don't set initialised_ok
+						return;
+					}
+
+					// allow mapping of motor3 servo on channel 7
+					add_motor_num(AP_MOTORS_CH_HEXA_PITCH_L);
+					SRV_Channels::set_angle(SRV_Channels::get_motor_function(AP_MOTORS_CH_HEXA_PITCH_L), _yaw_servo_angle_max_deg*100);
+
+					// allow mapping of motor6 servo on channel 8
+					add_motor_num(AP_MOTORS_CH_HEXA_PITCH_R);
+					SRV_Channels::set_angle(SRV_Channels::get_motor_function(AP_MOTORS_CH_HEXA_PITCH_R), _yaw_servo_angle_max_deg*100);// */
+/*
+					// the original HEXA-X mixing:
                     add_motor(AP_MOTORS_MOT_1,  90, AP_MOTORS_MATRIX_YAW_FACTOR_CW,  2);
                     add_motor(AP_MOTORS_MOT_2, -90, AP_MOTORS_MATRIX_YAW_FACTOR_CCW, 5);
                     add_motor(AP_MOTORS_MOT_3, -30, AP_MOTORS_MATRIX_YAW_FACTOR_CW,  6);
                     add_motor(AP_MOTORS_MOT_4, 150, AP_MOTORS_MATRIX_YAW_FACTOR_CCW, 3);
                     add_motor(AP_MOTORS_MOT_5,  30, AP_MOTORS_MATRIX_YAW_FACTOR_CCW, 1);
-                    add_motor(AP_MOTORS_MOT_6,-150, AP_MOTORS_MATRIX_YAW_FACTOR_CW,  4);
+                    add_motor(AP_MOTORS_MOT_6,-150, AP_MOTORS_MATRIX_YAW_FACTOR_CW,  4); // */
                     break;
                 case MOTOR_FRAME_TYPE_H:
                     // H is same as X except middle motors are closer to center

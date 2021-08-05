@@ -5,11 +5,22 @@
 #include <AP_Common/AP_Common.h>
 #include <AP_Math/AP_Math.h>        // ArduPilot Mega Vector/Matrix math Library
 #include <RC_Channel/RC_Channel.h>     // RC Channel Library
+//#include <SRV_Channel/SRV_Channel.h>	// 20210723 broadj addition
 #include "AP_MotorsMulticopter.h"
 
 #define AP_MOTORS_MATRIX_YAW_FACTOR_CW   -1
 #define AP_MOTORS_MATRIX_YAW_FACTOR_CCW   1
+/*
+// 20210723 broadj addition
+// servo uses channels 7, 8
+// #define AP_MOTORS_CH_HEXA_PITCH_L    CH_7
+// #define AP_MOTORS_CH_HEXA_PITCH_R	 CH_8
 
+// #define NUM_ACTUATORS 2
+// #define AP_MOTORS_SERVO_RANGE_DEG_MIN   5   // minimum angle movement of servo in degrees
+// #define AP_MOTORS_SERVO_RANGE_DEG_MAX   80  // maximum angle movement of servo in degrees
+// 20210723 broadj addition
+*/
 /// @class      AP_MotorsMatrix
 class AP_MotorsMatrix : public AP_MotorsMulticopter {
 public:
@@ -70,6 +81,14 @@ public:
     // return number of motor that has failed.  Should only be called if get_thrust_boost() returns true
     uint8_t             get_lost_motor() const override { return _motor_lost_index; }
 
+	// 20210724 broadj ****	uncertain if this needs to be here
+	// output a thrust to all motors that match a given motor
+    // mask. This is used to control tiltrotor motors in forward
+    // flight. Thrust is in the range 0 to 1
+    // rudder_dt applys diffential thrust for yaw in the range 0 to 1
+    //	void                output_motor_mask(float thrust, uint8_t mask, float rudder_dt) override; 20210725 disabled it
+	// 20210724 broadj
+
     // return the roll factor of any motor, this is used for tilt rotors and tail sitters
     // using copter motors for forward flight
     float               get_roll_factor(uint8_t i) override { return _roll_factor[i]; }
@@ -115,7 +134,12 @@ protected:
     float               _throttle_factor[AP_MOTORS_MAX_NUM_MOTORS];  // each motors contribution to throttle 0~1
     float               _thrust_rpyt_out[AP_MOTORS_MAX_NUM_MOTORS]; // combined roll, pitch, yaw and throttle outputs to motors in 0~1 range
     uint8_t             _test_order[AP_MOTORS_MAX_NUM_MOTORS];  // order of the motors in the test sequence
-
+/*
+	// 20210724 broadj - for pivot motors, servos, etc.
+	float      		    _pivot_angle_l;  // Angle of l pivot
+	float     		    _pivot_angle_r;  // Angle of r pivot
+	// 20210724 broadj
+*/
     // motor failure handling
     float               _thrust_rpyt_out_filt[AP_MOTORS_MAX_NUM_MOTORS];    // filtered thrust outputs with 1 second time constant
     uint8_t             _motor_lost_index;  // index number of the lost motor

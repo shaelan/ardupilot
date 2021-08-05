@@ -9,22 +9,48 @@ close all
 % setup the motors
 
 % locations (xyz) in m
-motor(1).location = [[sind(45),cosd(45)]*450*0.5,0] * 0.001; % front right
-motor(2).location = [[sind(135),cosd(135)]*450*0.5,0] * 0.001; % rear right
-motor(3).location = [[sind(225),cosd(225)]*450*0.5,0] * 0.001; % rear left
-motor(4).location = [[sind(315),cosd(315)]*450*0.5,0] * 0.001; % front left
+% motor(1).location = [[sind(45),cosd(45)]*450*0.5,0] * 0.001; % front right
+% motor(2).location = [[sind(135),cosd(135)]*450*0.5,0] * 0.001; % rear right
+% motor(3).location = [[sind(225),cosd(225)]*450*0.5,0] * 0.001; % rear left
+% motor(4).location = [[sind(315),cosd(315)]*450*0.5,0] * 0.001; % front left
+
+% PWM output to use
+% motor(1).channel = 1;
+% motor(2).channel = 4;
+% motor(3).channel = 2;
+% motor(4).channel = 3;
+
+% rotation direction: 1 = cw, -1 = ccw
+% motor(1).direction = -1;
+% motor(2).direction = 1;
+% motor(3).direction = -1;
+% motor(4).direction = 1;
+
+% setup the motors
+% attempt 20210728-20210805
+motor(1).location = [-0.5, -0.866]*960*0.5,0] * 0.001; % ccw front left
+motor(2).location = [-0.5, 0.866]*960*0.5,0] * 0.001; % cw front right
+motor(3).location = [0.5, -0.866]*960*0.5,0] * 0.001; % ccw mid right
+motor(4).location = [0.5, 0.866]*960*0.5,0] * 0.001; % cw rear right
+motor(5).location = [-1, 0]*960*0.5,0] * 0.001; % ccw rear left
+motor(6).location = [1, 0]*960*0.5,0] * 0.001; % cw mid left
+
 
 % PWM output to use
 motor(1).channel = 1;
-motor(2).channel = 4;
-motor(3).channel = 2;
-motor(4).channel = 3;
+motor(2).channel = 2;
+motor(3).channel = 3;
+motor(4).channel = 4;
+motor(5).channel = 5;
+motor(6).channel = 6;
 
 % rotation direction: 1 = cw, -1 = ccw
 motor(1).direction = -1;
-motor(2).direction = 1;
-motor(3).direction = -1;
+motor(2).direction = -1;
+motor(3).direction = 1;
 motor(4).direction = 1;
+motor(5).direction = 1;
+motor(6).direction = -1;
 
 % motor properties
 electrical.kv = 880; % (rpm/volt)
@@ -44,7 +70,7 @@ prop.mass = 12.5*0.001; % (kg) (only used for inertia)
 prop.inertia = (1/12)*prop.mass*prop.diameter^2; % rotational inertia (kgm^2) (rod about center)
 
 % assign properties to motors
-for i = 1:4
+for i = 1:6
     motor(i).electrical = electrical;
     motor(i).esc = esc;
     motor(i).prop = prop;
